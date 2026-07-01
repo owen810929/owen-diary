@@ -1,0 +1,6 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512" role="img" aria-label="Owen Diary icon">
+  <rect width="512" height="512" rx="96" fill="#0f766e"/>
+  <rect x="126" y="86" width="260" height="340" rx="28" fill="#ffffff"/>
+  <path d="M174 160h164M174 224h164M174 288h118" stroke="#1e2528" stroke-width="24" stroke-linecap="round"/>
+  <path d="M326 330l17 35 39 6-28 27 7 38-35-18-35 18 7-38-28-27 39-6z" fill="#f59e0b"/>
+</svg>

@@ -1,15 +1,14 @@
 :root {
   color-scheme: light;
-  --bg: #f7f8f6;
-  --surface: #ffffff;
-  --text: #1e2528;
-  --muted: #687276;
-  --line: #d8dfdc;
-  --teal: #0f766e;
-  --teal-dark: #0a5e58;
-  --amber: #b45309;
-  --rose: #be123c;
-  --shadow: 0 8px 28px rgba(30, 37, 40, 0.08);
+  --color-bg: #ffffff;
+  --color-surface: #ffffff;
+  --color-text: #111111;
+  --color-muted: #666666;
+  --color-border: #d6d6d6;
+  --color-active: #f2f2f2;
+  --color-primary: #111111;
+  --color-primary-active: #000000;
+  --shadow: 0 8px 28px rgba(0, 0, 0, 0.08);
 }
 
 * {
@@ -18,15 +17,15 @@
 
 html {
   min-height: 100%;
-  background: var(--bg);
+  background: var(--color-bg);
 }
 
 body {
   min-height: 100%;
   margin: 0;
   padding: 0 0 96px;
-  background: var(--bg);
-  color: var(--text);
+  background: var(--color-bg);
+  color: var(--color-text);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans TC", "Segoe UI", sans-serif;
   line-height: 1.5;
 }
@@ -53,8 +52,8 @@ button:disabled {
   justify-content: space-between;
   gap: 16px;
   padding: 18px 18px 12px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 0;
   z-index: 10;
@@ -62,7 +61,7 @@ button:disabled {
 
 .eyebrow {
   margin: 0 0 2px;
-  color: var(--teal);
+  color: var(--color-muted);
   font-size: 0.78rem;
   font-weight: 700;
 }
@@ -83,7 +82,7 @@ h1 {
   align-items: center;
   gap: 8px;
   min-width: max-content;
-  color: var(--muted);
+  color: var(--color-muted);
   font-size: 0.9rem;
 }
 
@@ -91,15 +90,15 @@ h1 {
   width: 10px;
   height: 10px;
   border-radius: 50%;
-  background: #aab3b0;
+  background: #a3a3a3;
 }
 
 .status-dot.connected {
-  background: var(--teal);
+  background: var(--color-primary);
 }
 
 .status-dot.warning {
-  background: var(--amber);
+  background: #8a8a8a;
 }
 
 .top-tabs {
@@ -107,8 +106,8 @@ h1 {
   grid-template-columns: repeat(4, 1fr);
   gap: 6px;
   padding: 10px 12px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--line);
+  background: var(--color-surface);
+  border-bottom: 1px solid var(--color-border);
   position: sticky;
   top: 74px;
   z-index: 9;
@@ -117,14 +116,17 @@ h1 {
 .tab-button {
   min-height: 44px;
   border-radius: 8px;
+  border: 1px solid transparent;
   background: transparent;
-  color: var(--muted);
+  color: var(--color-muted);
   font-weight: 700;
 }
 
 .tab-button.active {
-  background: #dff4ef;
-  color: var(--teal-dark);
+  border-color: var(--color-border);
+  background: var(--color-active);
+  color: var(--color-text);
+  box-shadow: inset 0 -2px 0 var(--color-primary);
 }
 
 main {
@@ -148,10 +150,21 @@ main {
 
 .toolbar-row {
   display: flex;
-  align-items: end;
+  align-items: flex-end;
   flex-wrap: wrap;
   gap: 10px;
   margin-bottom: 14px;
+}
+
+.toolbar-row .field {
+  margin-bottom: 0;
+}
+
+.date-toolbar {
+  display: grid;
+  grid-template-columns: max-content minmax(168px, 220px) max-content;
+  align-items: flex-end;
+  justify-content: start;
 }
 
 .field {
@@ -159,7 +172,7 @@ main {
   gap: 7px;
   width: 100%;
   margin-bottom: 14px;
-  color: var(--muted);
+  color: var(--color-muted);
   font-size: 0.92rem;
   font-weight: 700;
 }
@@ -170,13 +183,20 @@ main {
   flex: 1 1 166px;
 }
 
+.date-toolbar .compact-field {
+  width: 100%;
+  min-width: 0;
+  max-width: 220px;
+  flex: none;
+}
+
 input,
 textarea {
   width: 100%;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
+  background: var(--color-surface);
+  color: var(--color-text);
   outline: none;
 }
 
@@ -193,8 +213,8 @@ textarea {
 
 input:focus,
 textarea:focus {
-  border-color: var(--teal);
-  box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.14);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgba(17, 17, 17, 0.12);
 }
 
 .primary-button,
@@ -207,26 +227,26 @@ textarea:focus {
 }
 
 .primary-button {
-  background: var(--teal);
+  background: var(--color-primary);
   color: #ffffff;
 }
 
 .primary-button:active {
-  background: var(--teal-dark);
+  background: var(--color-primary-active);
 }
 
 .secondary-button {
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--line);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
 }
 
 .icon-button {
   width: 48px;
   padding: 0;
-  background: var(--surface);
-  color: var(--text);
-  border: 1px solid var(--line);
+  background: var(--color-surface);
+  color: var(--color-text);
+  border: 1px solid var(--color-border);
   font-size: 1.6rem;
 }
 
@@ -236,7 +256,7 @@ textarea:focus {
   gap: 10px;
   min-height: 48px;
   margin: 2px 0 12px;
-  color: var(--text);
+  color: var(--color-text);
   font-weight: 800;
 }
 
@@ -247,17 +267,17 @@ textarea:focus {
 
 .meta-text,
 .message {
-  color: var(--muted);
+  color: var(--color-muted);
   font-size: 0.92rem;
 }
 
 .message.error {
-  color: var(--rose);
+  color: var(--color-text);
   font-weight: 700;
 }
 
 .message.success {
-  color: var(--teal-dark);
+  color: var(--color-text);
   font-weight: 700;
 }
 
@@ -270,7 +290,7 @@ textarea:focus {
 
 .calendar-weekdays {
   margin: 6px 0;
-  color: var(--muted);
+  color: var(--color-muted);
   font-size: 0.8rem;
   font-weight: 800;
   text-align: center;
@@ -282,11 +302,11 @@ textarea:focus {
   place-items: center;
   aspect-ratio: 1;
   min-height: 44px;
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: var(--surface);
-  color: var(--text);
-  box-shadow: 0 1px 0 rgba(30, 37, 40, 0.03);
+  background: var(--color-surface);
+  color: var(--color-text);
+  box-shadow: 0 1px 0 rgba(0, 0, 0, 0.03);
 }
 
 .day-cell.blank {
@@ -297,7 +317,7 @@ textarea:focus {
 }
 
 .day-cell.today {
-  border-color: var(--teal);
+  border-color: var(--color-primary);
 }
 
 .day-cell.has-entry::after {
@@ -307,7 +327,7 @@ textarea:focus {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: var(--teal);
+  background: var(--color-primary);
 }
 
 .day-cell.important::before {
@@ -315,7 +335,7 @@ textarea:focus {
   position: absolute;
   top: 4px;
   right: 6px;
-  color: var(--amber);
+  color: var(--color-primary);
   font-size: 0.86rem;
 }
 
@@ -330,9 +350,9 @@ textarea:focus {
 .preview-item,
 .unresolved-item,
 .status-list div {
-  border: 1px solid var(--line);
+  border: 1px solid var(--color-border);
   border-radius: 8px;
-  background: var(--surface);
+  background: var(--color-surface);
 }
 
 .summary-strip div {
@@ -356,7 +376,7 @@ textarea:focus {
 }
 
 .preview-item.conflict {
-  border-color: #f0b4c2;
+  border-color: #8a8a8a;
 }
 
 .preview-item .preview-head,
@@ -372,15 +392,15 @@ textarea:focus {
 .badge {
   border-radius: 999px;
   padding: 3px 8px;
-  background: #e9efed;
-  color: var(--muted);
+  background: var(--color-active);
+  color: var(--color-muted);
   font-size: 0.78rem;
   font-weight: 800;
 }
 
 .badge.conflict {
-  background: #ffe4ea;
-  color: var(--rose);
+  background: var(--color-text);
+  color: #ffffff;
 }
 
 .status-list {
@@ -397,7 +417,7 @@ textarea:focus {
 }
 
 .status-list span {
-  color: var(--muted);
+  color: var(--color-muted);
 }
 
 .bottom-actions {
@@ -409,8 +429,8 @@ textarea:focus {
   grid-template-columns: 1fr 1fr;
   gap: 10px;
   padding: 12px 14px calc(12px + env(safe-area-inset-bottom));
-  background: rgba(247, 248, 246, 0.96);
-  border-top: 1px solid var(--line);
+  background: rgba(255, 255, 255, 0.96);
+  border-top: 1px solid var(--color-border);
   backdrop-filter: blur(12px);
   z-index: 20;
 }
@@ -434,7 +454,7 @@ textarea:focus {
     left: 50%;
     width: min(960px, calc(100% - 28px));
     transform: translateX(-50%);
-    border: 1px solid var(--line);
+    border: 1px solid var(--color-border);
     border-radius: 8px 8px 0 0;
     box-shadow: var(--shadow);
   }
@@ -445,5 +465,16 @@ textarea:focus {
 
   .summary-strip {
     grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 420px) {
+  .date-toolbar {
+    grid-template-columns: max-content minmax(0, 1fr) max-content;
+    gap: 8px;
+  }
+
+  .date-toolbar .secondary-button {
+    padding: 0 14px;
   }
 }

@@ -1,0 +1,14 @@
+.DS_Store
+Thumbs.db
+*.log
+.env
+.env.*
+node_modules/
+dist/
+build/
+
+# Real diary data must stay in Google Drive only.
+data/
+exports/
+settings/
+*.local.json

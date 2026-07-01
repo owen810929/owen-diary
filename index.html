@@ -1,0 +1,125 @@
+<!doctype html>
+<html lang="zh-Hant">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <meta name="theme-color" content="#0f766e">
+    <title>Owen Diary</title>
+    <link rel="manifest" href="manifest.webmanifest">
+    <link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+    <link rel="stylesheet" href="styles.css">
+    <script src="https://accounts.google.com/gsi/client" async defer></script>
+    <script src="src/parser.js" defer></script>
+    <script src="app.js" defer></script>
+  </head>
+  <body>
+    <header class="app-header">
+      <div>
+        <p class="eyebrow">Private PWA</p>
+        <h1>Owen Diary</h1>
+      </div>
+      <div class="connection">
+        <span id="connectionDot" class="status-dot"></span>
+        <span id="connectionText">未連線</span>
+      </div>
+    </header>
+
+    <nav class="top-tabs" aria-label="主要頁面">
+      <button class="tab-button active" data-view="editorView" type="button">今日</button>
+      <button class="tab-button" data-view="calendarView" type="button">月曆</button>
+      <button class="tab-button" data-view="importView" type="button">初始化</button>
+      <button class="tab-button" data-view="settingsView" type="button">設定</button>
+    </nav>
+
+    <main>
+      <section id="editorView" class="view active" aria-labelledby="editorTitle">
+        <div class="toolbar-row">
+          <button id="todayButton" class="secondary-button" type="button">今天</button>
+          <label class="field compact-field">
+            <span>日期</span>
+            <input id="entryDate" type="date">
+          </label>
+          <button id="loadDateButton" class="secondary-button" type="button">讀取</button>
+        </div>
+
+        <h2 id="editorTitle" class="view-title">日記</h2>
+
+        <label class="field">
+          <span>標題</span>
+          <input id="entryTitle" type="text" autocomplete="off" maxlength="80" placeholder="可空白">
+        </label>
+
+        <label class="field">
+          <span>正文</span>
+          <textarea id="entryContent" rows="16" placeholder="寫下今天的內容"></textarea>
+        </label>
+
+        <label class="switch-row">
+          <input id="entryImportant" type="checkbox">
+          <span>標記重要</span>
+        </label>
+
+        <p id="entryMeta" class="meta-text">尚未讀取</p>
+        <p id="editorMessage" class="message" role="status"></p>
+      </section>
+
+      <section id="calendarView" class="view" aria-labelledby="calendarTitle">
+        <div class="toolbar-row">
+          <button id="prevMonthButton" class="icon-button" type="button" aria-label="上個月">‹</button>
+          <label class="field compact-field">
+            <span>月份</span>
+            <input id="calendarMonth" type="month">
+          </label>
+          <button id="nextMonthButton" class="icon-button" type="button" aria-label="下個月">›</button>
+          <button id="refreshCalendarButton" class="secondary-button" type="button">更新</button>
+        </div>
+        <h2 id="calendarTitle" class="view-title">月曆</h2>
+        <div class="calendar-weekdays" aria-hidden="true">
+          <span>日</span><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span>
+        </div>
+        <div id="calendarGrid" class="calendar-grid"></div>
+        <p id="calendarMessage" class="message" role="status"></p>
+      </section>
+
+      <section id="importView" class="view" aria-labelledby="importTitle">
+        <h2 id="importTitle" class="view-title">舊 Google Doc 初始化</h2>
+        <label class="field">
+          <span>Google Doc 連結或 ID</span>
+          <input id="docInput" type="text" autocomplete="off" placeholder="docs.google.com/document/d/...">
+        </label>
+        <div class="toolbar-row">
+          <button id="previewImportButton" class="primary-button" type="button">讀取預覽</button>
+          <button id="writeImportButton" class="secondary-button" type="button" disabled>確認寫入</button>
+        </div>
+        <div id="importSummary" class="summary-strip"></div>
+        <div id="previewList" class="preview-list"></div>
+        <div id="unresolvedList" class="preview-list"></div>
+        <p id="importMessage" class="message" role="status"></p>
+      </section>
+
+      <section id="settingsView" class="view" aria-labelledby="settingsTitle">
+        <h2 id="settingsTitle" class="view-title">設定</h2>
+        <label class="field">
+          <span>Google OAuth Client ID</span>
+          <input id="clientIdInput" type="text" autocomplete="off" spellcheck="false" placeholder="貼上 Web client ID">
+        </label>
+        <div class="toolbar-row">
+          <button id="saveClientButton" class="secondary-button" type="button">儲存設定</button>
+          <button id="connectButton" class="primary-button" type="button">連線 Google</button>
+          <button id="disconnectButton" class="secondary-button" type="button">中斷</button>
+        </div>
+        <div class="status-list">
+          <div><span>Drive 資料夾</span><strong id="driveStatus">未初始化</strong></div>
+          <div><span>草稿保護</span><strong id="draftStatus">啟用</strong></div>
+          <div><span>PWA</span><strong id="pwaStatus">檢查中</strong></div>
+        </div>
+        <p id="settingsMessage" class="message" role="status"></p>
+      </section>
+    </main>
+
+    <div class="bottom-actions" aria-label="日記操作">
+      <button id="saveDraftButton" class="secondary-button" type="button">儲存草稿</button>
+      <button id="saveEntryButton" class="primary-button" type="button">儲存</button>
+    </div>
+  </body>
+</html>

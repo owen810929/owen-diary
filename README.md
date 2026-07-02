@@ -12,6 +12,7 @@ Owen Diary 是一個可部署到 GitHub Pages 的私人手機日記 PWA。第一
 - localStorage 自動草稿，降低手機瀏覽器重新整理或 OAuth 流程造成的文字遺失。
 - 月曆顯示有日記、無日記、重要日記。
 - 從既有 Google Doc 做首次初始化預覽與批次寫入。
+- 指定日期範圍匯出閱讀用 Google Doc。
 - PWA manifest 與 service worker 基本支援。
 
 ## 第一版不做
@@ -21,7 +22,6 @@ Owen Diary 是一個可部署到 GitHub Pages 的私人手機日記 PWA。第一
 - 富文字編輯器、圖片上傳、AI 摘要。
 - 一天多篇、複雜標籤系統。
 - 自動同步 Google Doc。
-- 指定日期範圍輸出 Google Doc。
 - 真實日記範例或真實日記 JSON。
 
 ## Google Drive 資料夾結構
@@ -41,7 +41,7 @@ Owen Diary
 └─ settings
 ```
 
-所有日記 JSON 都應建立在 `Owen Diary/data/YYYY/YYYY-MM/` 底下。`exports` 只先建立資料夾，第一版不實作 Google Doc 匯出。
+所有日記 JSON 都應建立在 `Owen Diary/data/YYYY/YYYY-MM/` 底下。匯出的 Google Doc 會建立在 `Owen Diary/exports/`，只是閱讀用歸檔，不是主資料來源。
 
 ## JSON 格式
 
@@ -90,6 +90,8 @@ https://www.googleapis.com/auth/drive.metadata.readonly
 https://www.googleapis.com/auth/documents.readonly
 ```
 
+匯出 Google Doc 使用既有 `drive.file` 權限在 `exports` 資料夾建立 app 自己建立的文件，並用 Google Docs API 寫入內容；`documents.readonly` 保留給舊 Google Doc 初始化讀取。不需要 client secret 或 API key。
+
 不要把 client secret、access token、refresh token 或任何私人密鑰放進 repo。前端只需要 Web client ID。
 
 ## GitHub Pages 部署
@@ -126,6 +128,12 @@ python -m http.server 8080
 
 寫入前會顯示預覽，包含目標日期、原始日期文字、目標檔名、正文開頭、衝突與未解析段落。已有同名 JSON 時不覆蓋。
 
+## 匯出 Google Doc
+
+「匯出」頁面可選擇起始日期與結束日期，App 會逐日讀取 `Owen Diary/data/YYYY/YYYY-MM/YYYY-MM-DD.json`，只匯出有日記的日期，未寫日期會略過。匯出文件會依日期由早到晚排列，重要日記標題會加上 `★`。
+
+匯出結果會建立成新的 Google Doc 並存入 `Owen Diary/exports/`。App 不會覆蓋既有 Google Doc，也不會修改或刪除原始 JSON。第一版最多匯出 366 天，避免一次造成過多 API 呼叫。
+
 ## 測試資料
 
 `fixtures/old-doc-sample.txt` 是假資料，只用來測試解析器。它不是私人日記，不能替代真實初始化資料。
@@ -147,8 +155,8 @@ node tests/parser.test.js
 
 ## 已知限制
 
-- 第一版不做 Google Doc 匯出。
 - 第一版不做 Drive Picker；需貼上既有 Google Doc URL 或 ID。
 - 手機上 OAuth 視窗可能受瀏覽器設定影響。
+- 若 Google 授權過期，匯出前需要重新連接 Google。
 - service worker 採簡單靜態快取，更新後若看到舊版，可重新整理一次。
 - 若 Google Drive 中已有同名資料夾但目前 OAuth scope 無法寫入，請讓 app 建立自己的 `Owen Diary` 資料夾。

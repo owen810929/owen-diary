@@ -103,7 +103,7 @@ h1 {
 
 .top-tabs {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(5, 1fr);
   gap: 6px;
   padding: 10px 12px;
   background: var(--color-surface);
@@ -328,6 +328,31 @@ textarea:focus {
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
+}
+
+.export-range {
+  align-items: flex-end;
+}
+
+.export-result {
+  display: grid;
+  gap: 6px;
+  margin: 12px 0;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+}
+
+.export-result[hidden] {
+  display: none;
+}
+
+.export-result a {
+  color: var(--color-text);
+  font-weight: 800;
+  text-decoration: underline;
+  text-underline-offset: 3px;
 }
 
 .calendar-weekdays,

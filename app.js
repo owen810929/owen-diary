@@ -9,9 +9,11 @@
   ].join(" ");
   const FOLDER_MIME = "application/vnd.google-apps.folder";
   const JSON_MIME = "application/json";
+  const GOOGLE_DOC_MIME = "application/vnd.google-apps.document";
   const CACHE_VERSION = "2026-07-01";
   const GOOGLE_READY_TIMEOUT_MS = 5000;
   const GOOGLE_READY_POLL_MS = 100;
+  const MAX_EXPORT_DAYS = 366;
 
   const state = {
     accessToken: "",
@@ -54,7 +56,9 @@
       "saveDraftButton", "saveEntryButton", "calendarMonth", "calendarGrid",
       "calendarMessage", "prevMonthButton", "nextMonthButton", "refreshCalendarButton",
       "docInput", "previewImportButton", "writeImportButton", "importSummary",
-      "previewList", "unresolvedList", "importMessage", "clientIdInput",
+      "previewList", "unresolvedList", "importMessage", "exportStartDate",
+      "exportEndDate", "exportButton", "exportSummary", "exportResult",
+      "exportDocName", "exportDocLink", "exportMessage", "clientIdInput",
       "saveClientButton", "connectButton", "disconnectButton", "driveStatus",
       "draftStatus", "pwaStatus", "settingsMessage"
     ].forEach((id) => {
@@ -89,12 +93,15 @@
 
     els.previewImportButton.addEventListener("click", previewImport);
     els.writeImportButton.addEventListener("click", writeImport);
+    els.exportButton.addEventListener("click", exportDiaryRange);
   }
 
   function setInitialDates() {
     const today = todayIso();
     els.entryDate.value = today;
     els.calendarMonth.value = today.slice(0, 7);
+    els.exportStartDate.value = today;
+    els.exportEndDate.value = today;
   }
 
   function loadSettings() {
@@ -988,6 +995,240 @@
       failed ? "error" : "success"
     );
     loadCalendarMonth(els.calendarMonth.value);
+  }
+
+  async function exportDiaryRange() {
+    const range = validateExportRange(els.exportStartDate.value, els.exportEndDate.value);
+    clearExportResult();
+
+    if (range.error) {
+      renderExportSummary(0, 0, 0);
+      setMessage(els.exportMessage, range.error, "error");
+      return;
+    }
+
+    if (!state.accessToken) {
+      renderExportSummary(0, 0, 0);
+      setMessage(els.exportMessage, "Google 尚未連線，請先到設定連接 Google。", "error");
+      return;
+    }
+
+    els.exportButton.disabled = true;
+    renderExportSummary(0, range.totalDays, 0);
+    setMessage(els.exportMessage, "正在讀取日記...");
+
+    try {
+      const result = await readEntriesForExport(range);
+      renderExportSummary(result.entries.length, result.skipped, result.failures.length);
+
+      if (!result.entries.length) {
+        const warning = result.failures.length ? `部分日期讀取失敗：${result.failures.join("、")}。` : "";
+        setMessage(els.exportMessage, `此日期範圍沒有可匯出的日記。${warning}`, result.failures.length ? "error" : undefined);
+        return;
+      }
+
+      setMessage(els.exportMessage, "正在建立 Google Doc...");
+      const exportTime = nowLocalMinuteText();
+      const title = exportDocumentTitle(range.startDate, range.endDate, exportTime);
+      const content = buildExportDocumentText(result.entries, range, exportTime);
+      const doc = await createExportGoogleDoc(title, content);
+
+      renderExportSummary(result.entries.length, result.skipped, result.failures.length);
+      showExportResult(doc);
+      const warning = result.failures.length ? `部分日期讀取失敗：${result.failures.join("、")}。` : "";
+      setMessage(els.exportMessage, `匯出完成，共 ${result.entries.length} 篇。${warning}`, "success");
+    } catch (error) {
+      setMessage(els.exportMessage, exportFriendlyError(error), "error");
+    } finally {
+      els.exportButton.disabled = false;
+    }
+  }
+
+  function validateExportRange(startDate, endDate) {
+    if (!startDate || !endDate) {
+      return { error: "起始日期與結束日期都必填。" };
+    }
+    if (!isValidDateInput(startDate) || !isValidDateInput(endDate)) {
+      return { error: "日期格式不正確。" };
+    }
+    if (endDate < startDate) {
+      return { error: "結束日期不得早於起始日期。" };
+    }
+
+    const totalDays = daysBetweenInclusive(startDate, endDate);
+    if (totalDays > MAX_EXPORT_DAYS) {
+      return { error: `日期範圍最多 ${MAX_EXPORT_DAYS} 天。` };
+    }
+
+    return { startDate, endDate, totalDays };
+  }
+
+  function isValidDateInput(value) {
+    return /^\d{4}-\d{2}-\d{2}$/.test(value);
+  }
+
+  function daysBetweenInclusive(startDate, endDate) {
+    const start = parseLocalDate(startDate);
+    const end = parseLocalDate(endDate);
+    return Math.floor((end - start) / 86400000) + 1;
+  }
+
+  function parseLocalDate(value) {
+    const [year, month, day] = value.split("-").map(Number);
+    return new Date(year, month - 1, day);
+  }
+
+  function nextDateIso(value) {
+    const next = parseLocalDate(value);
+    next.setDate(next.getDate() + 1);
+    return formatLocalDate(next);
+  }
+
+  async function readEntriesForExport(range) {
+    const entries = [];
+    const failures = [];
+    let skipped = 0;
+
+    for (let date = range.startDate; date <= range.endDate; date = nextDateIso(date)) {
+      try {
+        const file = await findDiaryFile(date, false);
+        if (!file) {
+          skipped += 1;
+          continue;
+        }
+
+        try {
+          const entry = await driveFetch(`https://www.googleapis.com/drive/v3/files/${file.id}?alt=media`);
+          entries.push(normalizeDiaryEntry(date, entry));
+        } catch {
+          failures.push(date);
+        }
+      } catch {
+        failures.push(date);
+      }
+    }
+
+    entries.sort((a, b) => a.date.localeCompare(b.date));
+    return { entries, skipped, failures };
+  }
+
+  function buildExportDocumentText(entries, range, exportTime) {
+    const lines = [
+      "Owen Diary",
+      `期間：${range.startDate} ～ ${range.endDate}`,
+      `匯出時間：${exportTime.display}`,
+      ""
+    ];
+
+    entries.forEach((entry, index) => {
+      lines.push(exportEntryTitle(entry));
+      if (entry.sourceDateText) {
+        lines.push(`原始日期：${entry.sourceDateText}`);
+      }
+      lines.push(`重要：${entry.isImportant ? "是" : "否"}`);
+      lines.push("");
+      lines.push(entry.content || "");
+      if (index < entries.length - 1) {
+        lines.push("");
+        lines.push("---");
+        lines.push("");
+      }
+    });
+
+    return `${lines.join("\n")}\n`;
+  }
+
+  function exportEntryTitle(entry) {
+    const title = entry.title ? ` - ${entry.title}` : "";
+    const important = entry.isImportant ? " ★" : "";
+    return `## ${entry.date}${title}${important}`;
+  }
+
+  function nowLocalMinuteText() {
+    const date = new Date();
+    const stamp = [
+      date.getFullYear(),
+      String(date.getMonth() + 1).padStart(2, "0"),
+      String(date.getDate()).padStart(2, "0"),
+      "-",
+      String(date.getHours()).padStart(2, "0"),
+      String(date.getMinutes()).padStart(2, "0"),
+      String(date.getSeconds()).padStart(2, "0")
+    ].join("");
+    return {
+      stamp,
+      display: `${formatLocalDate(date).replace(/-/g, "/")} ${String(date.getHours()).padStart(2, "0")}:${String(date.getMinutes()).padStart(2, "0")}`
+    };
+  }
+
+  function exportDocumentTitle(startDate, endDate, exportTime) {
+    return `Owen Diary ${startDate} to ${endDate} ${exportTime.stamp}`;
+  }
+
+  async function createExportGoogleDoc(title, content) {
+    const drive = await ensureBaseFolders();
+    const doc = await createGoogleDocFile(title, drive.exports.id);
+
+    await driveFetch(`https://docs.googleapis.com/v1/documents/${encodeURIComponent(doc.id)}:batchUpdate`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        requests: [
+          {
+            insertText: {
+              location: { index: 1 },
+              text: content
+            }
+          }
+        ]
+      })
+    });
+
+    return {
+      id: doc.id,
+      name: doc.name || title,
+      url: doc.webViewLink || `https://docs.google.com/document/d/${doc.id}/edit`
+    };
+  }
+
+  async function createGoogleDocFile(title, folderId) {
+    return driveFetch("https://www.googleapis.com/drive/v3/files?fields=id,name,webViewLink,parents", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        name: title,
+        mimeType: GOOGLE_DOC_MIME,
+        parents: [folderId]
+      })
+    });
+  }
+
+  function renderExportSummary(exported, skipped, failed) {
+    els.exportSummary.innerHTML = [
+      summaryBox("匯出篇數", exported),
+      summaryBox("略過日期", skipped),
+      summaryBox("讀取失敗", failed)
+    ].join("");
+  }
+
+  function clearExportResult() {
+    els.exportResult.hidden = true;
+    els.exportDocName.textContent = "";
+    els.exportDocLink.href = "#";
+  }
+
+  function showExportResult(doc) {
+    els.exportResult.hidden = false;
+    els.exportDocName.textContent = doc.name;
+    els.exportDocLink.href = doc.url;
+  }
+
+  function exportFriendlyError(error) {
+    const message = friendlyError(error);
+    if (/permission|insufficient|forbidden|403/i.test(message)) {
+      return "Drive / Docs 權限不足，請重新連接 Google 並確認授權。";
+    }
+    return message;
   }
 
   async function loadCalendarMonth(month) {

@@ -28,6 +28,7 @@
       <button class="tab-button active" data-view="editorView" type="button">今日</button>
       <button class="tab-button" data-view="calendarView" type="button">月曆</button>
       <button class="tab-button" data-view="importView" type="button">初始化</button>
+      <button class="tab-button" data-view="exportView" type="button">匯出</button>
       <button class="tab-button" data-view="settingsView" type="button">設定</button>
     </nav>
 
@@ -106,6 +107,27 @@
         <div id="previewList" class="preview-list"></div>
         <div id="unresolvedList" class="preview-list"></div>
         <p id="importMessage" class="message" role="status"></p>
+      </section>
+
+      <section id="exportView" class="view" aria-labelledby="exportTitle">
+        <h2 id="exportTitle" class="view-title">匯出 Google Doc</h2>
+        <div class="toolbar-row export-range">
+          <label class="field compact-field">
+            <span>起始日期</span>
+            <input id="exportStartDate" type="date">
+          </label>
+          <label class="field compact-field">
+            <span>結束日期</span>
+            <input id="exportEndDate" type="date">
+          </label>
+          <button id="exportButton" class="primary-button" type="button">匯出 Google Doc</button>
+        </div>
+        <div id="exportSummary" class="summary-strip"></div>
+        <div id="exportResult" class="export-result" hidden>
+          <strong id="exportDocName"></strong>
+          <a id="exportDocLink" href="#" target="_blank" rel="noopener">開啟 Google Doc</a>
+        </div>
+        <p id="exportMessage" class="message" role="status">尚未匯出。</p>
       </section>
 
       <section id="settingsView" class="view" aria-labelledby="settingsTitle">

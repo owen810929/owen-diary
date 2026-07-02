@@ -39,7 +39,8 @@
   function bindElements() {
     [
       "connectionDot", "connectionText", "entryDate", "entryTitle", "entryContent",
-      "entryImportant", "entryMeta", "editorMessage", "todayButton", "loadDateButton",
+      "entryImportant", "entryMeta", "editorMessage", "draftNotice",
+      "restoreDraftButton", "deleteDraftButton", "todayButton", "loadDateButton",
       "saveDraftButton", "saveEntryButton", "calendarMonth", "calendarGrid",
       "calendarMessage", "prevMonthButton", "nextMonthButton", "refreshCalendarButton",
       "docInput", "previewImportButton", "writeImportButton", "importSummary",
@@ -62,6 +63,8 @@
     els.entryTitle.addEventListener("input", scheduleDraftSave);
     els.entryContent.addEventListener("input", scheduleDraftSave);
     els.entryImportant.addEventListener("change", scheduleDraftSave);
+    els.restoreDraftButton.addEventListener("click", restoreCurrentDraft);
+    els.deleteDraftButton.addEventListener("click", deleteCurrentDraft);
     els.saveDraftButton.addEventListener("click", () => saveDraft(true));
     els.saveEntryButton.addEventListener("click", saveEntry);
 
@@ -136,6 +139,9 @@
       return;
     }
 
+    window.clearTimeout(state.draftTimer);
+    state.draftTimer = 0;
+
     const draft = {
       title: els.entryTitle.value,
       content: els.entryContent.value,
@@ -143,6 +149,7 @@
       savedAt: nowIsoWithOffset()
     };
     localStorage.setItem(draftKey(date), JSON.stringify(draft));
+    updateDraftNotice(date);
     if (showMessage) {
       setMessage(els.editorMessage, "草稿已儲存。", "success");
     }
@@ -159,6 +166,16 @@
 
   function clearDraft(date) {
     localStorage.removeItem(draftKey(date));
+    if (els.entryDate && els.entryDate.value === date) {
+      updateDraftNotice(date);
+    }
+  }
+
+  function updateDraftNotice(date = els.entryDate.value) {
+    const hasDraft = Boolean(date && readDraft(date));
+    els.draftNotice.hidden = !hasDraft;
+    els.restoreDraftButton.disabled = !hasDraft;
+    els.deleteDraftButton.disabled = !hasDraft;
   }
 
   async function loadDate(date) {
@@ -174,8 +191,8 @@
 
     if (!state.accessToken) {
       applyEntry(newEntry(date), null);
-      const restored = restoreDraftIfNeeded(date);
-      if (!restored) {
+      const hasDraft = showDraftPromptIfNeeded(date);
+      if (!hasDraft) {
         setMessage(els.editorMessage, "尚未連線 Google，會先保留本機草稿。");
       }
       return;
@@ -186,14 +203,14 @@
       state.currentFile = result.file;
       state.currentEntry = result.entry;
       applyEntry(result.entry, result.file);
-      const restored = restoreDraftIfNeeded(date);
-      if (!restored) {
+      const hasDraft = showDraftPromptIfNeeded(date);
+      if (!hasDraft) {
         setMessage(els.editorMessage, result.file ? "已讀取 Drive 日記。" : "這天還沒有日記。", "success");
       }
     } catch (error) {
       applyEntry(newEntry(date), null);
-      const restored = restoreDraftIfNeeded(date);
-      if (!restored) {
+      const hasDraft = showDraftPromptIfNeeded(date);
+      if (!hasDraft) {
         setMessage(els.editorMessage, friendlyError(error), "error");
       }
     }
@@ -221,22 +238,54 @@
       : "尚未建立 Drive JSON。";
   }
 
-  function restoreDraftIfNeeded(date) {
+  function showDraftPromptIfNeeded(date) {
     const draft = readDraft(date);
+    updateDraftNotice(date);
     if (!draft) {
       return false;
     }
 
-    const shouldRestore = window.confirm("這天有尚未送到 Drive 的本機草稿，要恢復嗎？");
-    if (!shouldRestore) {
-      return false;
+    setMessage(els.editorMessage, "這天有本機草稿，可選擇恢復或刪除。", "success");
+    return true;
+  }
+
+  function restoreCurrentDraft() {
+    const date = els.entryDate.value;
+    const draft = readDraft(date);
+    if (!draft) {
+      updateDraftNotice(date);
+      setMessage(els.editorMessage, "這天沒有本機草稿。");
+      return;
     }
 
+    applyDraft(draft);
+    updateDraftNotice(date);
+    setMessage(els.editorMessage, "已恢復本機草稿。", "success");
+  }
+
+  function applyDraft(draft) {
     els.entryTitle.value = draft.title || "";
     els.entryContent.value = draft.content || "";
     els.entryImportant.checked = Boolean(draft.isImportant);
-    setMessage(els.editorMessage, "已恢復本機草稿。", "success");
-    return true;
+  }
+
+  function deleteCurrentDraft() {
+    const date = els.entryDate.value;
+    if (!date) {
+      return;
+    }
+
+    window.clearTimeout(state.draftTimer);
+    state.draftTimer = 0;
+
+    if (!readDraft(date)) {
+      updateDraftNotice(date);
+      setMessage(els.editorMessage, "這天沒有本機草稿。");
+      return;
+    }
+
+    clearDraft(date);
+    setMessage(els.editorMessage, "已刪除本機草稿。Google Drive 日記不會被刪除。", "success");
   }
 
   async function saveEntry() {

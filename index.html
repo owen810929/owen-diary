@@ -42,6 +42,17 @@
           <button id="loadDateButton" class="secondary-button" type="button">讀取</button>
         </div>
 
+        <section id="draftNotice" class="draft-notice" hidden>
+          <div>
+            <strong>這天有本機草稿</strong>
+            <p>刪除草稿只會移除本機暫存，不會刪除 Google Drive 日記。</p>
+          </div>
+          <div class="draft-actions">
+            <button id="restoreDraftButton" class="primary-button" type="button">恢復草稿</button>
+            <button id="deleteDraftButton" class="secondary-button" type="button">刪除草稿</button>
+          </div>
+        </section>
+
         <h2 id="editorTitle" class="view-title">日記</h2>
 
         <label class="field">

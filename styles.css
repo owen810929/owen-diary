@@ -162,9 +162,22 @@ main {
 
 .date-toolbar {
   display: grid;
-  grid-template-columns: max-content minmax(168px, 220px) max-content;
+  grid-template-areas: "today date load";
+  grid-template-columns: max-content minmax(178px, 220px) max-content;
   align-items: flex-end;
   justify-content: start;
+}
+
+.date-toolbar #todayButton {
+  grid-area: today;
+}
+
+.date-toolbar .compact-field {
+  grid-area: date;
+}
+
+.date-toolbar #loadDateButton {
+  grid-area: load;
 }
 
 .field {
@@ -188,6 +201,11 @@ main {
   min-width: 0;
   max-width: 220px;
   flex: none;
+}
+
+.date-toolbar .secondary-button {
+  align-self: end;
+  min-width: 72px;
 }
 
 input,
@@ -279,6 +297,37 @@ textarea:focus {
 .message.success {
   color: var(--color-text);
   font-weight: 700;
+}
+
+.draft-notice {
+  display: grid;
+  gap: 12px;
+  margin-bottom: 14px;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-active);
+}
+
+.draft-notice[hidden] {
+  display: none;
+}
+
+.draft-notice strong {
+  display: block;
+  color: var(--color-text);
+}
+
+.draft-notice p {
+  margin: 4px 0 0;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.draft-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
 .calendar-weekdays,
@@ -466,15 +515,34 @@ textarea:focus {
   .summary-strip {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
+
+  .draft-notice {
+    grid-template-columns: minmax(0, 1fr) auto;
+    align-items: center;
+  }
+
+  .draft-actions {
+    grid-template-columns: max-content max-content;
+  }
 }
 
-@media (max-width: 420px) {
+@media (max-width: 520px) {
   .date-toolbar {
-    grid-template-columns: max-content minmax(0, 1fr) max-content;
+    grid-template-areas:
+      "date date"
+      "today load";
+    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
     gap: 8px;
+    align-items: stretch;
+    justify-content: stretch;
+  }
+
+  .date-toolbar .compact-field {
+    max-width: none;
   }
 
   .date-toolbar .secondary-button {
     padding: 0 14px;
+    width: 100%;
   }
 }

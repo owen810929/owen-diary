@@ -18,9 +18,12 @@
 html {
   min-height: 100%;
   background: var(--color-bg);
+  overflow-x: hidden;
 }
 
 body {
+  width: 100%;
+  max-width: 100%;
   min-height: 100%;
   margin: 0;
   padding: 0 0 96px;
@@ -28,12 +31,15 @@ body {
   color: var(--color-text);
   font-family: system-ui, -apple-system, BlinkMacSystemFont, "Noto Sans TC", "Segoe UI", sans-serif;
   line-height: 1.5;
+  overflow-x: hidden;
 }
 
 button,
 input,
 textarea {
+  box-sizing: border-box;
   font: inherit;
+  max-width: 100%;
 }
 
 button {
@@ -59,11 +65,8 @@ button:disabled {
   z-index: 10;
 }
 
-.eyebrow {
-  margin: 0 0 2px;
-  color: var(--color-muted);
-  font-size: 0.78rem;
-  font-weight: 700;
+.app-header > div {
+  min-width: 0;
 }
 
 h1,
@@ -103,17 +106,21 @@ h1 {
 
 .top-tabs {
   display: grid;
-  grid-template-columns: repeat(5, 1fr);
+  grid-template-columns: repeat(4, minmax(0, 1fr));
   gap: 6px;
   padding: 10px 12px;
   background: var(--color-surface);
   border-bottom: 1px solid var(--color-border);
   position: sticky;
-  top: 74px;
+  top: 66px;
   z-index: 9;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .tab-button {
+  min-width: 0;
   min-height: 44px;
   border-radius: 8px;
   border: 1px solid transparent;
@@ -131,6 +138,8 @@ h1 {
 
 main {
   width: min(960px, 100%);
+  max-width: 100%;
+  min-width: 0;
   margin: 0 auto;
   padding: 14px;
 }
@@ -143,6 +152,11 @@ main {
   display: block;
 }
 
+.view {
+  max-width: 100%;
+  min-width: 0;
+}
+
 .view-title {
   margin: 14px 0;
   font-size: 1.25rem;
@@ -153,6 +167,9 @@ main {
   align-items: flex-end;
   flex-wrap: wrap;
   gap: 10px;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
   margin-bottom: 14px;
 }
 
@@ -163,9 +180,12 @@ main {
 .date-toolbar {
   display: grid;
   grid-template-areas: "today date load";
-  grid-template-columns: max-content minmax(178px, 220px) max-content;
+  grid-template-columns: max-content minmax(0, 220px) max-content;
   align-items: flex-end;
   justify-content: start;
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 .date-toolbar #todayButton {
@@ -184,6 +204,8 @@ main {
   display: grid;
   gap: 7px;
   width: 100%;
+  max-width: 100%;
+  min-width: 0;
   margin-bottom: 14px;
   color: var(--color-muted);
   font-size: 0.92rem;
@@ -211,6 +233,7 @@ main {
 input,
 textarea {
   width: 100%;
+  min-width: 0;
   border: 1px solid var(--color-border);
   border-radius: 8px;
   background: var(--color-surface);
@@ -221,6 +244,13 @@ textarea {
 input {
   min-height: 48px;
   padding: 11px 12px;
+}
+
+input[type="date"],
+input[type="month"] {
+  width: 100%;
+  max-width: 100%;
+  min-width: 0;
 }
 
 textarea {
@@ -521,7 +551,7 @@ textarea:focus {
   }
 
   .top-tabs {
-    top: 76px;
+    top: 66px;
   }
 
   .bottom-actions {
@@ -556,18 +586,25 @@ textarea:focus {
     grid-template-areas:
       "date date"
       "today load";
-    grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 8px;
     align-items: stretch;
     justify-content: stretch;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
 
   .date-toolbar .compact-field {
-    max-width: none;
+    width: 100%;
+    max-width: 100%;
+    min-width: 0;
   }
 
   .date-toolbar .secondary-button {
-    padding: 0 14px;
     width: 100%;
+    min-width: 0;
+    padding: 0 10px;
+    white-space: nowrap;
   }
 }

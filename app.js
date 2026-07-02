@@ -1,5 +1,6 @@
 (() => {
   const CLIENT_ID_KEY = "owenDiary.googleClientId";
+  const DRIVE_FOLDERS_KEY = "owenDiary.driveFolders";
   const DRAFT_PREFIX = "owenDiary.draft.";
   const SCOPES = [
     "https://www.googleapis.com/auth/drive.file",
@@ -9,10 +10,17 @@
   const FOLDER_MIME = "application/vnd.google-apps.folder";
   const JSON_MIME = "application/json";
   const CACHE_VERSION = "2026-07-01";
+  const GOOGLE_READY_TIMEOUT_MS = 5000;
+  const GOOGLE_READY_POLL_MS = 100;
 
   const state = {
     accessToken: "",
     tokenClient: null,
+    tokenClientId: "",
+    tokenRequestMode: "",
+    tokenRequestResolver: null,
+    autoRestoreAttempted: false,
+    connectionState: "notConfigured",
     drive: null,
     currentFile: null,
     currentEntry: null,
@@ -30,9 +38,11 @@
     bindEvents();
     setInitialDates();
     loadSettings();
-    updateConnection();
+    updateConnectionState(getSavedClientId() ? "configured" : "notConfigured");
+    setDriveStatus("Drive 資料夾尚未確認");
     updatePwaStatus();
     loadDate(els.entryDate.value);
+    restoreGoogleSessionOnLoad();
     registerServiceWorker();
   }
 
@@ -89,6 +99,10 @@
 
   function loadSettings() {
     els.clientIdInput.value = localStorage.getItem(CLIENT_ID_KEY) || "";
+  }
+
+  function getSavedClientId() {
+    return localStorage.getItem(CLIENT_ID_KEY) || "";
   }
 
   function showView(viewId) {
@@ -361,50 +375,42 @@
     const clientId = els.clientIdInput.value.trim();
     if (!clientId) {
       localStorage.removeItem(CLIENT_ID_KEY);
+      state.accessToken = "";
       setMessage(els.settingsMessage, "已清除 Client ID。");
+      resetGoogleConnectionState("notConfigured");
       return;
     }
     localStorage.setItem(CLIENT_ID_KEY, clientId);
-    state.tokenClient = null;
+    resetGoogleConnectionState("configured");
+    initializeTokenClientIfReady(clientId);
     setMessage(els.settingsMessage, "設定已儲存。", "success");
   }
 
-  function connectGoogle() {
+  async function connectGoogle() {
     const clientId = els.clientIdInput.value.trim() || localStorage.getItem(CLIENT_ID_KEY);
     if (!clientId) {
       setMessage(els.settingsMessage, "請先填入 Google OAuth Client ID。", "error");
+      updateConnectionState("notConfigured");
       showView("settingsView");
       return;
     }
 
-    if (!window.google || !window.google.accounts || !window.google.accounts.oauth2) {
+    updateConnectionState("preparing");
+    setMessage(els.settingsMessage, "正在準備 Google 連線...");
+    const ready = await waitForGoogleIdentity();
+    if (!ready) {
+      updateConnectionState("needsReconnect");
       setMessage(els.settingsMessage, "Google 登入程式尚未載入，請稍後再試。", "error");
       return;
     }
 
-    if (!state.tokenClient) {
-      state.tokenClient = window.google.accounts.oauth2.initTokenClient({
-        client_id: clientId,
-        scope: SCOPES,
-        callback: async (response) => {
-          if (response.error) {
-            setMessage(els.settingsMessage, "Google 連線失敗。", "error");
-            return;
-          }
-          state.accessToken = response.access_token;
-          updateConnection();
-          setMessage(els.settingsMessage, "Google 已連線。", "success");
-          try {
-            await ensureBaseFolders();
-            await loadDate(els.entryDate.value);
-          } catch (error) {
-            setMessage(els.settingsMessage, friendlyError(error), "error");
-          }
-        }
-      });
+    if (!initializeTokenClient(clientId)) {
+      updateConnectionState("needsReconnect");
+      setMessage(els.settingsMessage, "Google 連線初始化失敗，請稍後再試。", "error");
+      return;
     }
 
-    state.tokenClient.requestAccessToken({ prompt: state.accessToken ? "" : "consent" });
+    requestGoogleAccessToken(state.accessToken ? "" : "consent", "manual");
   }
 
   function disconnectGoogle() {
@@ -414,25 +420,192 @@
     state.accessToken = "";
     state.drive = null;
     state.currentFile = null;
-    updateConnection();
+    updateConnectionState(getSavedClientId() ? "configured" : "notConfigured");
+    setDriveStatus("Drive 資料夾尚未確認");
     setMessage(els.settingsMessage, "已中斷 Google 連線。");
   }
 
-  function updateConnection() {
+  function resetGoogleConnectionState(nextState) {
+    state.tokenClient = null;
+    state.tokenClientId = "";
+    state.tokenRequestMode = "";
+    state.tokenRequestResolver = null;
+    state.autoRestoreAttempted = false;
+    state.drive = null;
+    state.currentFile = null;
+    updateConnectionState(nextState);
+    setDriveStatus("Drive 資料夾尚未確認");
+  }
+
+  function updateConnectionState(nextState) {
+    state.connectionState = nextState;
+    renderConnectionState();
+  }
+
+  function renderConnectionState() {
     const connected = Boolean(state.accessToken);
     els.connectionDot.classList.toggle("connected", connected);
     els.connectionDot.classList.toggle("warning", !connected);
-    els.connectionText.textContent = connected ? "已連線" : "未連線";
+    const labels = {
+      notConfigured: "未設定 Client ID",
+      configured: "已設定，尚未授權",
+      preparing: "正在準備 Google 連線",
+      restoring: "正在恢復 Google 連線",
+      connected: "已連線",
+      needsReconnect: "需要重新連接 Google"
+    };
+    els.connectionText.textContent = connected ? "已連線" : labels[state.connectionState] || "未連線";
+  }
+
+  async function restoreGoogleSessionOnLoad() {
+    const clientId = getSavedClientId();
+    if (!clientId || state.autoRestoreAttempted) {
+      return;
+    }
+
+    state.autoRestoreAttempted = true;
+    updateConnectionState("preparing");
+    setDriveStatus("Drive 資料夾尚未確認");
+    const ready = await waitForGoogleIdentity();
+    if (!ready) {
+      updateConnectionState("needsReconnect");
+      setMessage(els.settingsMessage, "已保留 Client ID；需要重新連接 Google。");
+      return;
+    }
+
+    if (!initializeTokenClient(clientId)) {
+      updateConnectionState("needsReconnect");
+      setMessage(els.settingsMessage, "Google 連線初始化失敗，請手動重新連接。", "error");
+      return;
+    }
+
+    updateConnectionState("restoring");
+    requestGoogleAccessToken("", "restore");
+  }
+
+  function googleIdentityReady() {
+    return Boolean(window.google && window.google.accounts && window.google.accounts.oauth2);
+  }
+
+  function waitForGoogleIdentity(timeoutMs = GOOGLE_READY_TIMEOUT_MS) {
+    if (googleIdentityReady()) {
+      return Promise.resolve(true);
+    }
+
+    return new Promise((resolve) => {
+      const startedAt = Date.now();
+      const timer = window.setInterval(() => {
+        if (googleIdentityReady()) {
+          window.clearInterval(timer);
+          resolve(true);
+          return;
+        }
+
+        if (Date.now() - startedAt >= timeoutMs) {
+          window.clearInterval(timer);
+          resolve(false);
+        }
+      }, GOOGLE_READY_POLL_MS);
+    });
+  }
+
+  function initializeTokenClientIfReady(clientId) {
+    if (!clientId || !googleIdentityReady()) {
+      return false;
+    }
+    return initializeTokenClient(clientId);
+  }
+
+  function initializeTokenClient(clientId) {
+    if (!clientId || !googleIdentityReady()) {
+      return false;
+    }
+    if (state.tokenClient && state.tokenClientId === clientId) {
+      return true;
+    }
+
+    state.tokenClient = window.google.accounts.oauth2.initTokenClient({
+      client_id: clientId,
+      scope: SCOPES,
+      callback: handleTokenResponse
+    });
+    state.tokenClientId = clientId;
+    return true;
+  }
+
+  function requestGoogleAccessToken(prompt, mode) {
+    if (!state.tokenClient || state.tokenRequestResolver) {
+      return Promise.resolve(false);
+    }
+
+    updateConnectionState(mode === "restore" ? "restoring" : "preparing");
+    return new Promise((resolve) => {
+      state.tokenRequestMode = mode;
+      state.tokenRequestResolver = resolve;
+      try {
+        state.tokenClient.requestAccessToken({ prompt });
+      } catch {
+        finishTokenRequest(false);
+        updateConnectionState("needsReconnect");
+        setMessage(
+          els.settingsMessage,
+          mode === "restore"
+            ? "需要重新連接 Google。Client ID 與本機草稿已保留。"
+            : "Google 連線失敗，請稍後再試。",
+          mode === "restore" ? undefined : "error"
+        );
+      }
+    });
+  }
+
+  async function handleTokenResponse(response) {
+    const mode = state.tokenRequestMode;
+    if (response.error || !response.access_token) {
+      finishTokenRequest(false);
+      updateConnectionState("needsReconnect");
+      setDriveStatus("Drive 資料夾尚未確認");
+      setMessage(
+        els.settingsMessage,
+        mode === "restore"
+          ? "需要重新連接 Google。Client ID 與本機草稿已保留。"
+          : "Google 連線失敗。",
+        mode === "restore" ? undefined : "error"
+      );
+      return;
+    }
+
+    state.accessToken = response.access_token;
+    updateConnectionState("connected");
+    setMessage(els.settingsMessage, mode === "restore" ? "已恢復 Google 連線。" : "Google 已連線。", "success");
+
+    try {
+      await ensureBaseFolders();
+      await loadDate(els.entryDate.value);
+      finishTokenRequest(true);
+    } catch (error) {
+      finishTokenRequest(false);
+      setMessage(els.settingsMessage, friendlyError(error), "error");
+    }
+  }
+
+  function finishTokenRequest(result) {
+    const resolver = state.tokenRequestResolver;
+    state.tokenRequestMode = "";
+    state.tokenRequestResolver = null;
+    if (resolver) {
+      resolver(result);
+    }
   }
 
   async function ensureBaseFolders() {
-    setDriveStatus("初始化中");
-    const root = await ensureFolder("Owen Diary", null);
-    const data = await ensureFolder("data", root.id);
-    const exportsFolder = await ensureFolder("exports", root.id);
-    const settings = await ensureFolder("settings", root.id);
+    setDriveStatus("Drive 資料夾檢查中");
+    const root = await ensureDriveFolder("root", "Owen Diary", null);
+    const data = await ensureDriveFolder("data", "data", root.id);
+    const exportsFolder = await ensureDriveFolder("exports", "exports", root.id);
+    const settings = await ensureDriveFolder("settings", "settings", root.id);
     state.drive = { root, data, exports: exportsFolder, settings };
-    setDriveStatus("已就緒");
+    writeDriveFolderCache(state.drive);
+    setDriveStatus("Drive 資料夾已就緒");
     return state.drive;
   }
 
@@ -448,13 +621,89 @@
   }
 
   async function findMonthFolder(date) {
-    const root = await findFolder("Owen Diary", null);
-    if (!root) return null;
-    const data = await findFolder("data", root.id);
+    const data = state.drive && state.drive.data
+      ? state.drive.data
+      : await findBaseDataFolder();
     if (!data) return null;
     const year = await findFolder(date.slice(0, 4), data.id);
     if (!year) return null;
     return findFolder(date.slice(0, 7), year.id);
+  }
+
+  async function findBaseDataFolder() {
+    const root = await validateCachedFolder("root", "Owen Diary", null) || await findFolder("Owen Diary", null);
+    if (!root) return null;
+    cacheDriveFolder("root", root);
+    const data = await validateCachedFolder("data", "data", root.id) || await findFolder("data", root.id);
+    if (data) {
+      cacheDriveFolder("data", data);
+    }
+    return data || null;
+  }
+
+  async function ensureDriveFolder(cacheKey, name, parentId) {
+    const cached = await validateCachedFolder(cacheKey, name, parentId);
+    if (cached) {
+      return cached;
+    }
+
+    const folder = await ensureFolder(name, parentId);
+    cacheDriveFolder(cacheKey, folder);
+    return folder;
+  }
+
+  async function validateCachedFolder(cacheKey, name, parentId) {
+    const cached = readDriveFolderCache()[cacheKey];
+    if (!cached || !cached.id) {
+      return null;
+    }
+
+    try {
+      const folder = await driveFetch(
+        `https://www.googleapis.com/drive/v3/files/${encodeURIComponent(cached.id)}?fields=id,name,mimeType,trashed,parents`
+      );
+      if (!folder || folder.trashed || folder.mimeType !== FOLDER_MIME || folder.name !== name) {
+        return null;
+      }
+      if (parentId && (!Array.isArray(folder.parents) || !folder.parents.includes(parentId))) {
+        return null;
+      }
+      return folder;
+    } catch {
+      return null;
+    }
+  }
+
+  function readDriveFolderCache() {
+    try {
+      const raw = localStorage.getItem(DRIVE_FOLDERS_KEY);
+      return raw ? JSON.parse(raw) : {};
+    } catch {
+      return {};
+    }
+  }
+
+  function writeDriveFolderCache(drive) {
+    const cache = {
+      root: compactFolder(drive.root),
+      data: compactFolder(drive.data),
+      exports: compactFolder(drive.exports),
+      settings: compactFolder(drive.settings)
+    };
+    localStorage.setItem(DRIVE_FOLDERS_KEY, JSON.stringify(cache));
+  }
+
+  function cacheDriveFolder(cacheKey, folder) {
+    const cache = readDriveFolderCache();
+    cache[cacheKey] = compactFolder(folder);
+    localStorage.setItem(DRIVE_FOLDERS_KEY, JSON.stringify(cache));
+  }
+
+  function compactFolder(folder) {
+    return {
+      id: folder.id,
+      name: folder.name
+    };
   }
 
   async function ensureFolder(name, parentId) {

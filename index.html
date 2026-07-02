@@ -24,7 +24,7 @@
     </header>
 
     <nav class="top-tabs" aria-label="主要頁面">
-      <button class="tab-button active" data-view="editorView" type="button">今日</button>
+      <button class="tab-button active" data-view="editorView" type="button">日記</button>
       <button class="tab-button" data-view="calendarView" type="button">月曆</button>
       <button class="tab-button" data-view="exportView" type="button">匯出</button>
       <button class="tab-button" data-view="settingsView" type="button">設定</button>
@@ -74,7 +74,7 @@
       </section>
 
       <section id="calendarView" class="view" aria-labelledby="calendarTitle">
-        <div class="toolbar-row">
+        <div class="toolbar-row calendar-toolbar">
           <button id="prevMonthButton" class="icon-button" type="button" aria-label="上個月">‹</button>
           <label class="field compact-field">
             <span>月份</span>
@@ -134,7 +134,7 @@
           <span>Google OAuth Client ID</span>
           <input id="clientIdInput" type="text" autocomplete="off" spellcheck="false" placeholder="貼上 Web client ID">
         </label>
-        <div class="toolbar-row">
+        <div class="toolbar-row settings-actions">
           <button id="saveClientButton" class="secondary-button" type="button">儲存設定</button>
           <button id="connectButton" class="primary-button" type="button">連線 Google</button>
           <button id="disconnectButton" class="secondary-button" type="button">中斷</button>

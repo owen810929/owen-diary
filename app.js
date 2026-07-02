@@ -105,7 +105,12 @@
   }
 
   function loadSettings() {
-    els.clientIdInput.value = localStorage.getItem(CLIENT_ID_KEY) || "";
+    const clientId = getSavedClientId();
+    els.clientIdInput.value = clientId;
+    setMessage(
+      els.settingsMessage,
+      clientId ? "Client ID 已儲存，可直接按「連線 Google」。" : "請輸入 Client ID。"
+    );
   }
 
   function getSavedClientId() {
@@ -383,18 +388,32 @@
     if (!clientId) {
       localStorage.removeItem(CLIENT_ID_KEY);
       state.accessToken = "";
+      els.clientIdInput.value = "";
       setMessage(els.settingsMessage, "已清除 Client ID。");
       resetGoogleConnectionState("notConfigured");
       return;
     }
+
+    persistClientId(clientId);
+    els.clientIdInput.value = clientId;
+    initializeTokenClientIfReady(clientId);
+    setMessage(els.settingsMessage, "Client ID 已儲存，可直接按「連線 Google」。", "success");
+  }
+
+  function persistClientId(clientId) {
+    if (getSavedClientId() === clientId) {
+      updateConnectionState(state.accessToken ? "connected" : "configured");
+      return false;
+    }
+
     localStorage.setItem(CLIENT_ID_KEY, clientId);
     resetGoogleConnectionState("configured");
-    initializeTokenClientIfReady(clientId);
-    setMessage(els.settingsMessage, "設定已儲存。", "success");
+    return true;
   }
 
   async function connectGoogle() {
-    const clientId = els.clientIdInput.value.trim() || localStorage.getItem(CLIENT_ID_KEY);
+    const inputClientId = els.clientIdInput.value.trim();
+    const clientId = inputClientId || getSavedClientId();
     if (!clientId) {
       setMessage(els.settingsMessage, "請先填入 Google OAuth Client ID。", "error");
       updateConnectionState("notConfigured");
@@ -402,12 +421,18 @@
       return;
     }
 
+    if (inputClientId) {
+      persistClientId(inputClientId);
+    } else {
+      els.clientIdInput.value = clientId;
+    }
+
     updateConnectionState("preparing");
-    setMessage(els.settingsMessage, "正在準備 Google 連線...");
+    setMessage(els.settingsMessage, "正在準備 Google 連線；Safari / mobile 可能需要手動完成 Google 授權。");
     const ready = await waitForGoogleIdentity();
     if (!ready) {
       updateConnectionState("needsReconnect");
-      setMessage(els.settingsMessage, "Google 登入程式尚未載入，請稍後再試。", "error");
+      setMessage(els.settingsMessage, "Google 登入程式尚未載入，請稍後再試；Safari / mobile 可能需要手動完成 Google 授權。", "error");
       return;
     }
 
@@ -417,7 +442,7 @@
       return;
     }
 
-    requestGoogleAccessToken(state.accessToken ? "" : "consent", "manual");
+    requestGoogleAccessToken("", "manual");
   }
 
   function disconnectGoogle() {
@@ -455,7 +480,7 @@
     els.connectionDot.classList.toggle("warning", !connected);
     const labels = {
       notConfigured: "未設定 Client ID",
-      configured: "已設定，尚未授權",
+      configured: "Client ID 已儲存",
       preparing: "正在準備 Google 連線",
       restoring: "正在恢復 Google 連線",
       connected: "已連線",
@@ -476,7 +501,7 @@
     const ready = await waitForGoogleIdentity();
     if (!ready) {
       updateConnectionState("needsReconnect");
-      setMessage(els.settingsMessage, "已保留 Client ID；需要重新連接 Google。");
+      setMessage(els.settingsMessage, "Client ID 已儲存；需要重新連接 Google。");
       return;
     }
 
@@ -558,7 +583,7 @@
           els.settingsMessage,
           mode === "restore"
             ? "需要重新連接 Google。Client ID 與本機草稿已保留。"
-            : "Google 連線失敗，請稍後再試。",
+            : "Google 連線失敗，請稍後再試；Safari / mobile 可能需要手動完成 Google 授權。",
           mode === "restore" ? undefined : "error"
         );
       }
@@ -575,7 +600,7 @@
         els.settingsMessage,
         mode === "restore"
           ? "需要重新連接 Google。Client ID 與本機草稿已保留。"
-          : "Google 連線失敗。",
+          : "Google 連線失敗；Safari / mobile 可能需要手動完成 Google 授權。",
         mode === "restore" ? undefined : "error"
       );
       return;

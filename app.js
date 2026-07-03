@@ -52,7 +52,7 @@
     [
       "connectionDot", "connectionText", "entryDate", "entryTitle", "entryContent",
       "entryImportant", "entryMeta", "editorMessage", "draftNotice",
-      "restoreDraftButton", "deleteDraftButton", "todayButton", "loadDateButton",
+      "restoreDraftButton", "deleteDraftButton", "todayButton", "prevDateButton", "nextDateButton", "loadDateButton",
       "saveDraftButton", "saveEntryButton", "calendarMonth", "calendarGrid",
       "calendarMessage", "prevMonthButton", "nextMonthButton", "refreshCalendarButton",
       "docInput", "previewImportButton", "writeImportButton", "importSummary",
@@ -72,6 +72,8 @@
     });
 
     els.todayButton.addEventListener("click", () => loadDate(todayIso()));
+    els.prevDateButton.addEventListener("click", () => shiftEntryDate(-1));
+    els.nextDateButton.addEventListener("click", () => shiftEntryDate(1));
     els.loadDateButton.addEventListener("click", () => loadDate(els.entryDate.value));
     els.entryDate.addEventListener("change", () => loadDate(els.entryDate.value));
     els.entryTitle.addEventListener("input", scheduleDraftSave);
@@ -240,6 +242,17 @@
         setMessage(els.editorMessage, friendlyError(error), "error");
       }
     }
+  }
+
+  function shiftEntryDate(delta) {
+    const currentDate = isValidDateInput(els.entryDate.value) ? els.entryDate.value : todayIso();
+    if (isValidDateInput(els.entryDate.value)) {
+      saveDraft(false);
+    }
+
+    const next = parseLocalDate(currentDate);
+    next.setDate(next.getDate() + delta);
+    loadDate(formatLocalDate(next));
   }
 
   function newEntry(date) {

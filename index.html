@@ -56,6 +56,24 @@
 
         <h2 id="editorTitle" class="view-title">日記</h2>
 
+        <fieldset class="mood-field" aria-label="心情">
+          <legend>心情</legend>
+          <div class="mood-options">
+            <label>
+              <input type="radio" name="entryMood" value="good">
+              <span>好</span>
+            </label>
+            <label>
+              <input type="radio" name="entryMood" value="neutral" checked>
+              <span>中性</span>
+            </label>
+            <label>
+              <input type="radio" name="entryMood" value="bad">
+              <span>壞</span>
+            </label>
+          </div>
+        </fieldset>
+
         <label class="field">
           <span>標題</span>
           <input id="entryTitle" type="text" autocomplete="off" maxlength="80" placeholder="可空白">

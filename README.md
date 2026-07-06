@@ -59,6 +59,7 @@ YYYY-MM-DD.json
   "sourceDateText": "6/15-6/18",
   "title": "",
   "content": "日記正文",
+  "mood": "neutral",
   "isImportant": false,
   "history": [],
   "createdAt": "2026-06-18T00:00:00+08:00",
@@ -66,7 +67,9 @@ YYYY-MM-DD.json
 }
 ```
 
-`history` 最多保留最近 3 次修改前的 `title`、`content`、`isImportant`、`updatedAt`。
+`mood` 允許值為 `"good"`、`"neutral"`、`"bad"`，分別代表好、中性、壞。舊資料可能沒有 `mood`，App 會視為 `"neutral"`，不會批次改寫舊 JSON。
+
+`history` 最多保留最近 3 次修改前的 `title`、`content`、`mood`、`isImportant`、`updatedAt`。
 
 ## Google OAuth / API 設定
 

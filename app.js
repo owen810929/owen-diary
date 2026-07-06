@@ -11,8 +11,10 @@
   const JSON_MIME = "application/json";
   const GOOGLE_DOC_MIME = "application/vnd.google-apps.document";
   const CACHE_VERSION = "2026-07-01";
-  const GOOGLE_READY_TIMEOUT_MS = 5000;
+  const GOOGLE_IDENTITY_SCRIPT_SRC = "https://accounts.google.com/gsi/client";
+  const GOOGLE_IDENTITY_TIMEOUT_MS = 9000;
   const GOOGLE_READY_POLL_MS = 100;
+  const GOOGLE_SCRIPT_RETRY_LIMIT = 1;
   const MAX_EXPORT_DAYS = 366;
 
   const state = {
@@ -23,6 +25,12 @@
     tokenRequestResolver: null,
     autoRestoreAttempted: false,
     connectionState: "notConfigured",
+    googleIdentityScriptStatus: "notStarted",
+    googleIdentityScriptPromise: null,
+    googleIdentityScriptRetryCount: 0,
+    googleIdentityScriptError: "",
+    googleOAuthClientStatus: "notStarted",
+    googleOAuthClientError: "",
     drive: null,
     currentFile: null,
     currentEntry: null,
@@ -60,7 +68,8 @@
       "exportEndDate", "exportButton", "exportSummary", "exportResult",
       "exportDocName", "exportDocLink", "exportMessage", "clientIdInput",
       "saveClientButton", "connectButton", "disconnectButton", "driveStatus",
-      "draftStatus", "pwaStatus", "settingsMessage"
+      "draftStatus", "pwaStatus", "googleIdentityStatus", "googleOAuthStatus",
+      "pwaGoogleFallback", "settingsMessage"
     ].forEach((id) => {
       els[id] = document.getElementById(id);
     });
@@ -111,8 +120,10 @@
     els.clientIdInput.value = clientId;
     setMessage(
       els.settingsMessage,
-      clientId ? "Client ID 已儲存，可直接按「連線 Google」。" : "請輸入 Client ID。"
+      clientId ? "Client ID 已儲存，可直接按「連線 Google」。" : "請輸入 Google OAuth Client ID。"
     );
+    renderGoogleIdentityState();
+    hidePwaGoogleFallback();
   }
 
   function getSavedClientId() {
@@ -434,6 +445,7 @@
       return;
     }
 
+    hidePwaGoogleFallback();
     if (inputClientId) {
       persistClientId(inputClientId);
     } else {
@@ -441,17 +453,20 @@
     }
 
     updateConnectionState("preparing");
-    setMessage(els.settingsMessage, "正在準備 Google 連線；Safari / mobile 可能需要手動完成 Google 授權。");
-    const ready = await waitForGoogleIdentity();
+    setMessage(els.settingsMessage, "正在載入 Google 登入程式。");
+    const ready = await ensureGoogleIdentityReady({ allowRetry: true });
     if (!ready) {
       updateConnectionState("needsReconnect");
-      setMessage(els.settingsMessage, "Google 登入程式尚未載入，請稍後再試；Safari / mobile 可能需要手動完成 Google 授權。", "error");
+      showPwaGoogleFallbackIfNeeded();
+      setMessage(els.settingsMessage, googleIdentityFailureMessage(), "error");
       return;
     }
 
+    setMessage(els.settingsMessage, "正在準備 Google 連線。");
     if (!initializeTokenClient(clientId)) {
       updateConnectionState("needsReconnect");
-      setMessage(els.settingsMessage, "Google 連線初始化失敗，請稍後再試。", "error");
+      showPwaGoogleFallbackIfNeeded();
+      setMessage(els.settingsMessage, googleOAuthClientFailureMessage(), "error");
       return;
     }
 
@@ -476,6 +491,8 @@
     state.tokenRequestMode = "";
     state.tokenRequestResolver = null;
     state.autoRestoreAttempted = false;
+    setGoogleOAuthClientStatus("notStarted");
+    hidePwaGoogleFallback();
     state.drive = null;
     state.currentFile = null;
     updateConnectionState(nextState);
@@ -492,14 +509,20 @@
     els.connectionDot.classList.toggle("connected", connected);
     els.connectionDot.classList.toggle("warning", !connected);
     const labels = {
-      notConfigured: "未設定 Client ID",
+      notConfigured: "請輸入 Client ID",
       configured: "Client ID 已儲存",
+      googleLoading: "正在載入 Google 登入程式",
+      googleLoadFailed: "Google 登入程式無法載入",
       preparing: "正在準備 Google 連線",
       restoring: "正在恢復 Google 連線",
-      connected: "已連線",
-      needsReconnect: "需要重新連接 Google"
+      connected: "Google 已連線",
+      needsReconnect: "需要重新連接 Google",
+      pwaFallback: "請用 Safari 開啟"
     };
     els.connectionText.textContent = connected ? "已連線" : labels[state.connectionState] || "未連線";
+    if (els.connectButton) {
+      els.connectButton.disabled = state.googleIdentityScriptStatus === "loading" || Boolean(state.tokenRequestResolver);
+    }
   }
 
   async function restoreGoogleSessionOnLoad() {
@@ -511,16 +534,19 @@
     state.autoRestoreAttempted = true;
     updateConnectionState("preparing");
     setDriveStatus("Drive 資料夾尚未確認");
-    const ready = await waitForGoogleIdentity();
+    setMessage(els.settingsMessage, "Client ID 已儲存，正在載入 Google 登入程式。");
+    const ready = await ensureGoogleIdentityReady({ allowRetry: false });
     if (!ready) {
       updateConnectionState("needsReconnect");
-      setMessage(els.settingsMessage, "Client ID 已儲存；需要重新連接 Google。");
+      showPwaGoogleFallbackIfNeeded();
+      setMessage(els.settingsMessage, "Client ID 已儲存；Google 登入程式無法載入，需要重新連接 Google。", "error");
       return;
     }
 
     if (!initializeTokenClient(clientId)) {
       updateConnectionState("needsReconnect");
-      setMessage(els.settingsMessage, "Google 連線初始化失敗，請手動重新連接。", "error");
+      showPwaGoogleFallbackIfNeeded();
+      setMessage(els.settingsMessage, googleOAuthClientFailureMessage(), "error");
       return;
     }
 
@@ -532,26 +558,144 @@
     return Boolean(window.google && window.google.accounts && window.google.accounts.oauth2);
   }
 
-  function waitForGoogleIdentity(timeoutMs = GOOGLE_READY_TIMEOUT_MS) {
+  async function ensureGoogleIdentityReady({ allowRetry }) {
     if (googleIdentityReady()) {
-      return Promise.resolve(true);
+      setGoogleIdentityScriptStatus("loaded");
+      return true;
     }
 
-    return new Promise((resolve) => {
+    if (state.googleIdentityScriptStatus === "failed") {
+      if (!allowRetry || state.googleIdentityScriptRetryCount >= GOOGLE_SCRIPT_RETRY_LIMIT) {
+        return false;
+      }
+      setMessage(els.settingsMessage, "正在重新載入 Google 登入程式。");
+      return loadGoogleIdentityScript({ retry: true });
+    }
+
+    const loaded = await loadGoogleIdentityScript();
+    if (loaded) {
+      return true;
+    }
+
+    if (!allowRetry || state.googleIdentityScriptRetryCount >= GOOGLE_SCRIPT_RETRY_LIMIT) {
+      return false;
+    }
+
+    setMessage(els.settingsMessage, "正在重新載入 Google 登入程式。");
+    return loadGoogleIdentityScript({ retry: true });
+  }
+
+  function loadGoogleIdentityScript({ retry = false } = {}) {
+    if (googleIdentityReady()) {
+      setGoogleIdentityScriptStatus("loaded");
+      return Promise.resolve(true);
+    }
+    if (state.googleIdentityScriptPromise && !retry) {
+      return state.googleIdentityScriptPromise;
+    }
+    if (retry && state.googleIdentityScriptRetryCount >= GOOGLE_SCRIPT_RETRY_LIMIT) {
+      return Promise.resolve(false);
+    }
+
+    if (retry) {
+      state.googleIdentityScriptRetryCount += 1;
+      removeGoogleIdentityScriptTag();
+    }
+
+    setGoogleIdentityScriptStatus("loading");
+
+    const script = findGoogleIdentityScript() || createGoogleIdentityScriptTag();
+    state.googleIdentityScriptPromise = new Promise((resolve) => {
+      let settled = false;
       const startedAt = Date.now();
-      const timer = window.setInterval(() => {
-        if (googleIdentityReady()) {
-          window.clearInterval(timer);
+      let readyTimer = 0;
+      let timeoutTimer = 0;
+
+      const finish = (loaded, errorMessage = "") => {
+        if (settled) {
+          return;
+        }
+        settled = true;
+        script.removeEventListener("load", onLoad);
+        script.removeEventListener("error", onError);
+        window.clearInterval(readyTimer);
+        window.clearTimeout(timeoutTimer);
+        if (loaded) {
+          script.dataset.owenGsiStatus = "loaded";
+          state.googleIdentityScriptPromise = Promise.resolve(true);
+          setGoogleIdentityScriptStatus("loaded");
           resolve(true);
           return;
         }
 
-        if (Date.now() - startedAt >= timeoutMs) {
-          window.clearInterval(timer);
-          resolve(false);
+        script.dataset.owenGsiStatus = "failed";
+        state.googleIdentityScriptPromise = null;
+        setGoogleIdentityScriptStatus("failed", errorMessage || "Google 登入程式無法載入。");
+        resolve(false);
+      };
+
+      const onLoad = () => {
+        if (googleIdentityReady()) {
+          finish(true);
+        }
+      };
+
+      const onError = () => finish(false, "Google 登入程式無法載入。");
+
+      script.addEventListener("load", onLoad);
+      script.addEventListener("error", onError);
+
+      readyTimer = window.setInterval(() => {
+        if (googleIdentityReady()) {
+          finish(true);
+          return;
+        }
+
+        if (Date.now() - startedAt >= GOOGLE_IDENTITY_TIMEOUT_MS) {
+          finish(false, "Google 登入程式載入逾時。");
         }
       }, GOOGLE_READY_POLL_MS);
+
+      timeoutTimer = window.setTimeout(() => {
+        finish(false, "Google 登入程式載入逾時。");
+      }, GOOGLE_IDENTITY_TIMEOUT_MS + GOOGLE_READY_POLL_MS);
+
+      if (!script.parentNode) {
+        document.head.appendChild(script);
+      }
     });
+
+    return state.googleIdentityScriptPromise;
+  }
+
+  function findGoogleIdentityScript() {
+    return Array.from(document.getElementsByTagName("script")).find((script) => (
+      normalizeScriptSrc(script.src) === GOOGLE_IDENTITY_SCRIPT_SRC
+    ));
+  }
+
+  function createGoogleIdentityScriptTag() {
+    const script = document.createElement("script");
+    script.src = GOOGLE_IDENTITY_SCRIPT_SRC;
+    script.async = true;
+    script.defer = true;
+    script.dataset.owenGsiStatus = "loading";
+    return script;
+  }
+
+  function removeGoogleIdentityScriptTag() {
+    const script = findGoogleIdentityScript();
+    if (script && !googleIdentityReady()) {
+      script.remove();
+    }
+  }
+
+  function normalizeScriptSrc(src) {
+    try {
+      return new URL(src, window.location.href).href;
+    } catch {
+      return src;
+    }
   }
 
   function initializeTokenClientIfReady(clientId) {
@@ -566,16 +710,26 @@
       return false;
     }
     if (state.tokenClient && state.tokenClientId === clientId) {
+      setGoogleOAuthClientStatus("initialized");
       return true;
     }
 
-    state.tokenClient = window.google.accounts.oauth2.initTokenClient({
-      client_id: clientId,
-      scope: SCOPES,
-      callback: handleTokenResponse
-    });
-    state.tokenClientId = clientId;
-    return true;
+    setGoogleOAuthClientStatus("initializing");
+    try {
+      state.tokenClient = window.google.accounts.oauth2.initTokenClient({
+        client_id: clientId,
+        scope: SCOPES,
+        callback: handleTokenResponse
+      });
+      state.tokenClientId = clientId;
+      setGoogleOAuthClientStatus("initialized");
+      return true;
+    } catch (error) {
+      state.tokenClient = null;
+      state.tokenClientId = "";
+      setGoogleOAuthClientStatus("failed", friendlyError(error));
+      return false;
+    }
   }
 
   function requestGoogleAccessToken(prompt, mode) {
@@ -587,16 +741,20 @@
     return new Promise((resolve) => {
       state.tokenRequestMode = mode;
       state.tokenRequestResolver = resolve;
+      renderConnectionState();
       try {
         state.tokenClient.requestAccessToken({ prompt });
       } catch {
         finishTokenRequest(false);
         updateConnectionState("needsReconnect");
+        showPwaGoogleFallbackIfNeeded();
         setMessage(
           els.settingsMessage,
           mode === "restore"
             ? "需要重新連接 Google。Client ID 與本機草稿已保留。"
-            : "Google 連線失敗，請稍後再試；Safari / mobile 可能需要手動完成 Google 授權。",
+            : isStandalonePwa()
+            ? pwaGoogleFallbackMessage()
+            : "Google 連線視窗無法開啟，請稍後再試；Safari / mobile 可能需要手動完成 Google 授權。",
           mode === "restore" ? undefined : "error"
         );
       }
@@ -609,9 +767,14 @@
       finishTokenRequest(false);
       updateConnectionState("needsReconnect");
       setDriveStatus("Drive 資料夾尚未確認");
+      if (mode !== "restore") {
+        showPwaGoogleFallbackIfNeeded();
+      }
       setMessage(
         els.settingsMessage,
-        mode === "restore"
+        mode !== "restore" && isStandalonePwa()
+          ? pwaGoogleFallbackMessage()
+          : mode === "restore"
           ? "需要重新連接 Google。Client ID 與本機草稿已保留。"
           : "Google 連線失敗；Safari / mobile 可能需要手動完成 Google 授權。",
         mode === "restore" ? undefined : "error"
@@ -620,6 +783,7 @@
     }
 
     state.accessToken = response.access_token;
+    hidePwaGoogleFallback();
     updateConnectionState("connected");
     setMessage(els.settingsMessage, mode === "restore" ? "已恢復 Google 連線。" : "Google 已連線。", "success");
 
@@ -637,6 +801,7 @@
     const resolver = state.tokenRequestResolver;
     state.tokenRequestMode = "";
     state.tokenRequestResolver = null;
+    renderConnectionState();
     if (resolver) {
       resolver(result);
     }
@@ -1440,7 +1605,85 @@
     return error && error.message ? error.message : "操作失敗，請稍後再試。";
   }
 
+  function setGoogleIdentityScriptStatus(status, errorMessage = "") {
+    state.googleIdentityScriptStatus = status;
+    state.googleIdentityScriptError = errorMessage;
+    renderGoogleIdentityState();
+    renderConnectionState();
+  }
+
+  function setGoogleOAuthClientStatus(status, errorMessage = "") {
+    state.googleOAuthClientStatus = status;
+    state.googleOAuthClientError = errorMessage;
+    renderGoogleIdentityState();
+  }
+
+  function renderGoogleIdentityState() {
+    if (!els.googleIdentityStatus || !els.googleOAuthStatus) {
+      return;
+    }
+
+    const scriptLabels = {
+      notStarted: "尚未開始載入",
+      loading: "正在載入 Google 登入程式",
+      loaded: "Google 登入程式已載入",
+      failed: "Google 登入程式無法載入"
+    };
+    const oauthLabels = {
+      notStarted: "尚未初始化",
+      initializing: "正在準備 Google 連線",
+      initialized: "Google 連線已準備",
+      failed: "Google 連線初始化失敗"
+    };
+
+    els.googleIdentityStatus.textContent = scriptLabels[state.googleIdentityScriptStatus] || "尚未開始載入";
+    els.googleOAuthStatus.textContent = oauthLabels[state.googleOAuthClientStatus] || "尚未初始化";
+  }
+
+  function isStandalonePwa() {
+    return Boolean(
+      (window.matchMedia && window.matchMedia("(display-mode: standalone)").matches)
+        || window.navigator.standalone === true
+    );
+  }
+
+  function pwaGoogleFallbackMessage() {
+    return "目前 iPhone 主畫面 App 可能無法完成 Google 登入。請用 Safari 開啟 Owen Diary 後連線 Google。";
+  }
+
+  function googleIdentityFailureMessage() {
+    return isStandalonePwa()
+      ? pwaGoogleFallbackMessage()
+      : "Google 登入程式無法載入，請確認網路後再試一次。Client ID、本機草稿與 Drive 資料夾快取都已保留。";
+  }
+
+  function googleOAuthClientFailureMessage() {
+    return isStandalonePwa()
+      ? pwaGoogleFallbackMessage()
+      : "Google 連線初始化失敗，請稍後再試。Client ID 與本機草稿已保留。";
+  }
+
+  function showPwaGoogleFallbackIfNeeded() {
+    if (!els.pwaGoogleFallback || !isStandalonePwa()) {
+      return false;
+    }
+
+    els.pwaGoogleFallback.hidden = false;
+    updateConnectionState("pwaFallback");
+    return true;
+  }
+
+  function hidePwaGoogleFallback() {
+    if (els.pwaGoogleFallback) {
+      els.pwaGoogleFallback.hidden = true;
+    }
+  }
+
   function updatePwaStatus() {
+    if (isStandalonePwa()) {
+      els.pwaStatus.textContent = "主畫面 App 模式";
+      return;
+    }
     els.pwaStatus.textContent = "serviceWorker" in navigator ? "可用" : "不支援";
   }
 

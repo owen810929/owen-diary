@@ -94,6 +94,10 @@ https://www.googleapis.com/auth/documents.readonly
 
 不要把 client secret、access token、refresh token 或任何私人密鑰放進 repo。前端只需要 Web client ID。
 
+### 手機與 PWA Google 連線
+
+Chrome / Safari 瀏覽器模式可完成 Google 連線。iPhone 主畫面 PWA standalone 模式下，Google Identity Services 可能無法完成登入；若畫面顯示 Google 登入程式無法載入，請用 Safari 開啟 Owen Diary 後再連線 Google。
+
 ## GitHub Pages 部署
 
 1. 合併 PR 後，到 repo 的 Settings。

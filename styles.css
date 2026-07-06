@@ -403,6 +403,45 @@ textarea:focus {
   font-size: 0.9rem;
 }
 
+.pwa-google-fallback {
+  display: grid;
+  gap: 8px;
+  margin: 14px 0;
+  padding: 12px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-active);
+}
+
+.pwa-google-fallback[hidden] {
+  display: none;
+}
+
+.pwa-google-fallback strong {
+  color: var(--color-text);
+}
+
+.pwa-google-fallback p {
+  margin: 0;
+  color: var(--color-muted);
+  font-size: 0.9rem;
+}
+
+.pwa-google-fallback a {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  justify-self: start;
+  min-height: 44px;
+  padding: 0 14px;
+  border: 1px solid var(--color-border);
+  border-radius: 8px;
+  background: var(--color-surface);
+  color: var(--color-text);
+  font-weight: 800;
+  text-decoration: none;
+}
+
 .draft-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;

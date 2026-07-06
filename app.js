@@ -16,6 +16,12 @@
   const GOOGLE_READY_POLL_MS = 100;
   const GOOGLE_SCRIPT_RETRY_LIMIT = 1;
   const MAX_EXPORT_DAYS = 366;
+  const DEFAULT_MOOD = "neutral";
+  const MOOD_LABELS = {
+    good: "好",
+    neutral: "中性",
+    bad: "壞"
+  };
 
   const state = {
     accessToken: "",
@@ -87,6 +93,9 @@
     els.entryDate.addEventListener("change", () => loadDate(els.entryDate.value));
     els.entryTitle.addEventListener("input", scheduleDraftSave);
     els.entryContent.addEventListener("input", scheduleDraftSave);
+    document.querySelectorAll("input[name='entryMood']").forEach((input) => {
+      input.addEventListener("change", scheduleDraftSave);
+    });
     els.entryImportant.addEventListener("change", scheduleDraftSave);
     els.restoreDraftButton.addEventListener("click", restoreCurrentDraft);
     els.deleteDraftButton.addEventListener("click", deleteCurrentDraft);
@@ -184,6 +193,7 @@
     const draft = {
       title: els.entryTitle.value,
       content: els.entryContent.value,
+      mood: getSelectedMood(),
       isImportant: els.entryImportant.checked,
       savedAt: nowIsoWithOffset()
     };
@@ -201,6 +211,26 @@
     } catch {
       return null;
     }
+  }
+
+  function normalizeMood(value) {
+    return Object.prototype.hasOwnProperty.call(MOOD_LABELS, value) ? value : DEFAULT_MOOD;
+  }
+
+  function moodLabel(value) {
+    return MOOD_LABELS[normalizeMood(value)];
+  }
+
+  function getSelectedMood() {
+    const selected = document.querySelector("input[name='entryMood']:checked");
+    return normalizeMood(selected ? selected.value : DEFAULT_MOOD);
+  }
+
+  function setSelectedMood(value) {
+    const mood = normalizeMood(value);
+    document.querySelectorAll("input[name='entryMood']").forEach((input) => {
+      input.checked = input.value === mood;
+    });
   }
 
   function clearDraft(date) {
@@ -272,6 +302,7 @@
       sourceDateText: date,
       title: "",
       content: "",
+      mood: DEFAULT_MOOD,
       isImportant: false,
       history: [],
       createdAt: `${date}T00:00:00+08:00`,
@@ -282,6 +313,7 @@
   function applyEntry(entry, file) {
     els.entryTitle.value = entry.title || "";
     els.entryContent.value = entry.content || "";
+    setSelectedMood(entry.mood);
     els.entryImportant.checked = Boolean(entry.isImportant);
     els.entryMeta.textContent = file
       ? `Drive 檔案：${file.name}，最後更新：${entry.updatedAt || "未知"}`
@@ -316,6 +348,7 @@
   function applyDraft(draft) {
     els.entryTitle.value = draft.title || "";
     els.entryContent.value = draft.content || "";
+    setSelectedMood(draft.mood);
     els.entryImportant.checked = Boolean(draft.isImportant);
   }
 
@@ -377,18 +410,21 @@
   function buildDiaryPayload(date, previous, hasExistingFile) {
     const title = els.entryTitle.value.trim();
     const content = els.entryContent.value;
+    const mood = getSelectedMood();
     const isImportant = els.entryImportant.checked;
     const history = Array.isArray(previous.history) ? [...previous.history] : [];
 
     if (hasExistingFile) {
       const changed = previous.content !== content ||
         (previous.title || "") !== title ||
+        normalizeMood(previous.mood) !== mood ||
         Boolean(previous.isImportant) !== isImportant;
 
       if (changed) {
         history.unshift({
           title: previous.title || "",
           content: previous.content || "",
+          mood: normalizeMood(previous.mood),
           isImportant: Boolean(previous.isImportant),
           updatedAt: previous.updatedAt || ""
         });
@@ -400,6 +436,7 @@
       sourceDateText: previous.sourceDateText || date,
       title,
       content,
+      mood,
       isImportant,
       history: history.slice(0, 3),
       createdAt: previous.createdAt || `${date}T00:00:00+08:00`,
@@ -973,6 +1010,7 @@
       ...newEntry(date),
       ...entry,
       date,
+      mood: normalizeMood(entry && entry.mood),
       history: Array.isArray(entry.history) ? entry.history.slice(0, 3) : []
     };
   }
@@ -1180,6 +1218,7 @@
           sourceDateText: entry.sourceDateText,
           title: "",
           content: entry.content,
+          mood: DEFAULT_MOOD,
           isImportant: false,
           history: [],
           createdAt: `${entry.date}T00:00:00+08:00`,
@@ -1328,6 +1367,7 @@
       if (entry.sourceDateText) {
         lines.push(`原始日期：${entry.sourceDateText}`);
       }
+      lines.push(`心情：${moodLabel(entry.mood)}`);
       lines.push(`重要：${entry.isImportant ? "是" : "否"}`);
       lines.push("");
       lines.push(entry.content || "");
